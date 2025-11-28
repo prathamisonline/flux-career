@@ -1,0 +1,5 @@
+{
+  "name": "AI Cover Letter Generator",
+  "description": "Generate personalized cover letters using Google Gemini and sync them to Google Sheets.",
+  "requestFramePermissions": []
+}
