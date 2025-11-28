@@ -3,16 +3,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Send, Copy, Trash2, FileText, Sparkles, Mail, Loader2, Lock, 
   Moon, Sun, FileUser, Briefcase, BrainCircuit, X, History, 
-  FileDown, ChevronDown, FileBadge 
+  FileDown, ChevronDown, FileBadge, MessageSquare 
 } from 'lucide-react';
 
 import ConfigPanel from './components/ConfigPanel';
 import LandingPage from './components/LandingPage';
 import Toast from './components/Toast';
+import ChatSidebar from './components/ChatSidebar';
 
-import { AppConfig, ToastState, HistoryItem } from './types';
+import { AppConfig, ToastState, HistoryItem, ChatMessage } from './types';
 import { extractEmail, copyToClipboard, downloadAsPDF, sendToGoogleSheets } from './services/utils';
-import { generateCoverLetter, generateInterviewQuestions, generateTailoredResume } from './services/aiService';
+import { generateCoverLetter, generateInterviewQuestions, generateTailoredResume, sendChatResponse } from './services/aiService';
 
 // ------------------------------------------------------------------
 // SYSTEM CONFIGURATION
@@ -68,6 +69,7 @@ const App: React.FC = () => {
   const [config, setConfig] = useState<AppConfig>(DEFAULT_USER_CONFIG);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   
   // State: Inputs
   const [activeTab, setActiveTab] = useState<'jd' | 'resume'>('jd');
@@ -89,6 +91,10 @@ const App: React.FC = () => {
   const [interviewPrep, setInterviewPrep] = useState<string | null>(null);
   const [showInterviewModal, setShowInterviewModal] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  
+  // State: Chat
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [isChatTyping, setIsChatTyping] = useState(false);
   
   // State: Operational
   const [isGenerating, setIsGenerating] = useState(false);
@@ -243,6 +249,7 @@ const App: React.FC = () => {
     }
 
     setIsGenerating(true);
+    setChatMessages([]); // Reset chat context on new generation
     
     try {
       if (outputTab === 'letter') {
@@ -279,6 +286,58 @@ const App: React.FC = () => {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleChatRequest = async (userMessage: string) => {
+    const activeKey = getActiveApiKey();
+    if (!activeKey) {
+      showToast("API Key missing", "error");
+      setIsConfigOpen(true);
+      return;
+    }
+
+    const newMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: userMessage,
+      timestamp: Date.now()
+    };
+
+    setChatMessages(prev => [...prev, newMessage]);
+    setIsChatTyping(true);
+
+    try {
+      const responseText = await sendChatResponse(
+        [...chatMessages, newMessage],
+        {
+          jobDescription,
+          resumeText,
+          currentDocument: outputTab === 'letter' ? generatedLetter : generatedResume,
+          documentType: outputTab === 'letter' ? 'Cover Letter' : 'Tailored Resume'
+        },
+        config
+      );
+
+      setChatMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: responseText,
+        timestamp: Date.now()
+      }]);
+    } catch (error: any) {
+      showToast("Chat failed: " + error.message, 'error');
+    } finally {
+      setIsChatTyping(false);
+    }
+  };
+
+  const handleApplyContent = (content: string) => {
+    if (outputTab === 'letter') {
+      setGeneratedLetter(content);
+    } else {
+      setGeneratedResume(content);
+    }
+    showToast('Content applied to editor', 'success');
   };
 
   const handleInterviewPrep = async () => {
@@ -374,6 +433,7 @@ const App: React.FC = () => {
       setExtractedEmail(null);
       setInterviewPrep(null);
       setActiveTab('jd');
+      setChatMessages([]);
     }
   };
 
@@ -396,7 +456,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-[#050505] flex flex-col text-zinc-800 dark:text-zinc-200 font-sans transition-colors duration-300">
+    <div className="min-h-screen bg-zinc-50 dark:bg-[#050505] flex flex-col text-zinc-800 dark:text-zinc-200 font-sans transition-colors duration-300 relative overflow-x-hidden">
       
       {/* Header */}
       <header className="bg-white/80 dark:bg-black/50 border-b border-zinc-200 dark:border-white/5 sticky top-0 z-30 backdrop-blur-md">
@@ -418,6 +478,16 @@ const App: React.FC = () => {
               {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
             </button>
             <div className="h-6 w-px bg-zinc-200 dark:bg-zinc-800 mx-1"></div>
+            
+            <button 
+              onClick={() => setIsChatOpen(!isChatOpen)}
+              className={`p-2 rounded-full transition-colors relative ${isChatOpen ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5'}`}
+              title="AI Chat"
+            >
+              <MessageSquare size={18} />
+              {chatMessages.length > 0 && !isChatOpen && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-500 rounded-full border border-white dark:border-black"></span>}
+            </button>
+            
             <button 
               onClick={() => setIsHistoryOpen(true)} 
               className="p-2 text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5 rounded-full transition-colors relative"
@@ -442,7 +512,7 @@ const App: React.FC = () => {
       </header>
 
       {/* Main Content Grid */}
-      <main className="flex-1 w-full max-w-[1800px] mx-auto p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <main className={`flex-1 w-full max-w-[1800px] mx-auto p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-4 gap-6 transition-all duration-300 ${isChatOpen ? 'pr-[400px]' : ''}`}>
         
         {/* Left Column: Inputs (25%) */}
         <section className="flex flex-col gap-4 h-[calc(100vh-140px)] min-h-[600px] lg:col-span-1">
@@ -695,6 +765,17 @@ const App: React.FC = () => {
         </section>
 
       </main>
+
+      {/* Chat Sidebar */}
+      <ChatSidebar 
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        messages={chatMessages}
+        onSendMessage={handleChatRequest}
+        isTyping={isChatTyping}
+        onApplyContent={handleApplyContent}
+        activeDocument={outputTab}
+      />
 
       {/* History Panel */}
       {isHistoryOpen && (

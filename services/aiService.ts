@@ -1,6 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { AppConfig } from "../types";
+import { AppConfig, ChatMessage } from "../types";
 
 // --- INTERFACES ---
 
@@ -130,7 +130,7 @@ export const generateCoverLetter = async (
   resumeText: string,
   userName: string,
   tone: string,
-  length: string,
+  length: string, 
   language: string,
   config: AppConfig
 ): Promise<string> => {
@@ -190,4 +190,47 @@ export const generateTailoredResume = async (
   // Clean up common AI markdown artifacts
   text = text.replace(/```html/g, '').replace(/```/g, '').trim();
   return text;
+};
+
+export const sendChatResponse = async (
+  history: ChatMessage[],
+  context: {
+    jobDescription: string;
+    resumeText: string;
+    currentDocument: string;
+    documentType: 'Cover Letter' | 'Tailored Resume';
+  },
+  config: AppConfig
+): Promise<string> => {
+  const systemPrompt = `You are a professional editor assisting a candidate with their ${context.documentType}.
+  
+  CONTEXT:
+  - Job Description Provided: ${context.jobDescription ? 'Yes' : 'No'}
+  - Resume Provided: ${context.resumeText ? 'Yes' : 'No'}
+  
+  CURRENT DOCUMENT CONTENT:
+  """
+  ${context.currentDocument.substring(0, 15000)}
+  """
+  
+  CRITICAL RULES:
+  1. You are helpful and concise.
+  2. If the user asks for an edit, correction, or rewrite, you MUST return the **FULL, COMPLETE DOCUMENT** with the changes applied. Do NOT return just a snippet.
+  3. When returning document content, you MUST wrap it strictly in these tags: 
+     <DOCUMENT_CONTENT>
+     ... full document text/html here ...
+     </DOCUMENT_CONTENT>
+  4. Put your conversational reply (e.g., "I've corrected the dates...") OUTSIDE the tags.
+  5. If the document is a Resume, strictly maintain the HTML structure (<h3>, <ul>, <li>, <strong>) inside the tags.
+  6. Do NOT include markdown code blocks (like \`\`\`html) inside the <DOCUMENT_CONTENT> tags.
+  `;
+
+  // Format history into a conversation block
+  const conversation = history.slice(-10).map(msg => 
+    `${msg.role === 'user' ? 'USER' : 'ASSISTANT'}: ${msg.content}`
+  ).join('\n\n');
+
+  const userPrompt = `CHAT HISTORY:\n${conversation}\n\nUSER'S LATEST REQUEST: (See history)`;
+
+  return generateText({ systemPrompt, userPrompt, config });
 };
