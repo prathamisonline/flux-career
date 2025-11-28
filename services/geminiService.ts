@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 
 export const generateCoverLetter = async (
@@ -7,6 +8,7 @@ export const generateCoverLetter = async (
   tone: string,
   length: string, // e.g., 'Short', 'Medium', 'Long'
   language: string, // e.g., 'English', 'Spanish'
+  model: string, // Dynamic model selection
   apiKey: string
 ): Promise<string> => {
   if (!apiKey) {
@@ -52,11 +54,11 @@ Cover Letter Body:`;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: model || 'gemini-2.5-flash',
       contents: prompt,
     });
     
-    return response.text || "No content generated.";
+    return response.text ? response.text.trim() : "No content generated.";
   } catch (error: any) {
     console.error("Gemini API Error:", error);
     throw new Error(error.message || "Failed to generate cover letter");
@@ -65,6 +67,7 @@ Cover Letter Body:`;
 
 export const generateInterviewQuestions = async (
   jobDescription: string,
+  model: string,
   apiKey: string
 ): Promise<string> => {
   if (!apiKey) throw new Error("API Key missing");
@@ -83,7 +86,7 @@ export const generateInterviewQuestions = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: model || 'gemini-2.5-flash',
       contents: prompt,
     });
     return response.text || "Failed to generate questions.";
@@ -95,6 +98,7 @@ export const generateInterviewQuestions = async (
 export const generateTailoredResume = async (
   jobDescription: string,
   resumeText: string,
+  model: string,
   apiKey: string
 ): Promise<string> => {
   if (!apiKey) throw new Error("API Key missing");
@@ -140,12 +144,12 @@ export const generateTailoredResume = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: model || 'gemini-2.5-flash',
       contents: prompt,
     });
     let text = response.text || "";
     // Cleanup markdown if present
-    text = text.replace(/```html/g, '').replace(/```/g, '');
+    text = text.replace(/```html/g, '').replace(/```/g, '').trim();
     return text;
   } catch (error: any) {
     throw new Error("Failed to generate resume: " + error.message);

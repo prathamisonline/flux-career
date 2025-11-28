@@ -47,6 +47,7 @@ const SYSTEM_CONFIG = {
 
 const DEFAULT_USER_CONFIG: AppConfig = {
   ...SYSTEM_CONFIG,
+  model: 'gemini-2.5-flash',
   userName: '',
   userEmail: '',
   userPhone: '',
@@ -138,6 +139,9 @@ const App: React.FC = () => {
         const parsed = JSON.parse(savedConfig);
         setConfig(prev => ({ 
           ...prev, 
+          // Preserve system defaults if local storage is empty/old
+          apiKey: parsed.apiKey || SYSTEM_CONFIG.apiKey,
+          model: parsed.model || 'gemini-2.5-flash',
           userName: parsed.userName || '', 
           userEmail: parsed.userEmail || '',
           userPhone: parsed.userPhone || '',
@@ -155,6 +159,8 @@ const App: React.FC = () => {
   // Save drafts
   useEffect(() => {
     localStorage.setItem('ai_cover_letter_user_profile', JSON.stringify({
+      apiKey: config.apiKey,
+      model: config.model,
       userName: config.userName,
       userEmail: config.userEmail,
       userPhone: config.userPhone,
@@ -223,7 +229,8 @@ const App: React.FC = () => {
 
   const handleGenerate = async () => {
     if (!config.apiKey) {
-      showToast('System Error: API Key not configured by administrator.', 'error');
+      showToast('System Error: API Key not configured. Please open Settings.', 'error');
+      setIsConfigOpen(true);
       return;
     }
     if (!jobDescription.trim()) {
@@ -244,6 +251,7 @@ const App: React.FC = () => {
           selectedTone,
           selectedLength,
           selectedLanguage,
+          config.model,
           config.apiKey
         );
         setGeneratedLetter(letter);
@@ -260,6 +268,7 @@ const App: React.FC = () => {
         const resumeHtml = await generateTailoredResume(
             jobDescription,
             resumeText,
+            config.model,
             config.apiKey
         );
         setGeneratedResume(resumeHtml.trim());
@@ -278,7 +287,11 @@ const App: React.FC = () => {
     setIsPrepGenerating(true);
     setShowInterviewModal(true);
     try {
-      const prep = await generateInterviewQuestions(jobDescription, config.apiKey);
+      const prep = await generateInterviewQuestions(
+          jobDescription,
+          config.model,
+          config.apiKey
+      );
       setInterviewPrep(prep);
     } catch (e) {
       setInterviewPrep("Failed to generate questions.");

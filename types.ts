@@ -1,6 +1,7 @@
 
 export interface AppConfig {
   apiKey: string;
+  model: string; // New field for model selection
   appsScriptUrl: string;
   sheetName: string;
   userName: string;
