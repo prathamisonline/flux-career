@@ -1,15 +1,30 @@
 
+export type AIProvider = 'gemini' | 'openai' | 'openrouter';
+
 export interface AppConfig {
-  apiKey: string;
-  model: string; // New field for model selection
+  // Provider Selection
+  provider: AIProvider;
+  model: string;
+
+  // API Keys
+  geminiApiKey: string;
+  openAiApiKey: string;
+  openRouterApiKey: string; // Used for Anthropic/Claude, DeepSeek, Llama via OpenRouter
+
+  // Legacy/Generic (mapped to Gemini for backward compat)
+  apiKey?: string; 
+
+  // Integrations
   appsScriptUrl: string;
   sheetName: string;
+  googleClientId?: string;
+  googleClientSecret?: string;
+
+  // User Profile
   userName: string;
   userEmail: string;
   userPhone?: string;
   userLinkedIn?: string;
-  googleClientId?: string;
-  googleClientSecret?: string;
 }
 
 export interface ToastState {
@@ -31,11 +46,10 @@ export interface SheetPayload {
 export interface HistoryItem {
   id: string;
   timestamp: string;
-  jobTitle: string; // Extracted or first few words
+  jobTitle: string; 
   content: string;
 }
 
-// Add types for Google Identity Services
 declare global {
   interface Window {
     google: {
@@ -51,6 +65,6 @@ declare global {
         };
       };
     };
-    html2pdf: any; // For the PDF library
+    html2pdf: any; 
   }
 }

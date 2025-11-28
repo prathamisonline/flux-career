@@ -1,30 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Send, 
-  Copy, 
-  Trash2, 
-  FileText, 
-  Sparkles,
-  Mail,
-  Loader2,
-  Lock,
-  UserCircle,
-  Moon,
-  Sun,
-  FileUser,
-  Briefcase,
-  BrainCircuit,
-  X,
-  History,
-  Clock,
-  Languages,
-  AlignLeft,
-  FileDown,
-  Phone,
-  Linkedin,
-  FileBadge,
-  ChevronDown
+  Send, Copy, Trash2, FileText, Sparkles, Mail, Loader2, Lock, 
+  Moon, Sun, FileUser, Briefcase, BrainCircuit, X, History, 
+  FileDown, ChevronDown, FileBadge 
 } from 'lucide-react';
 
 import ConfigPanel from './components/ConfigPanel';
@@ -32,13 +11,14 @@ import LandingPage from './components/LandingPage';
 import Toast from './components/Toast';
 
 import { AppConfig, ToastState, HistoryItem } from './types';
-import { extractEmail, copyToClipboard, downloadAsText, downloadAsPDF, sendToGoogleSheets } from './services/utils';
-import { generateCoverLetter, generateInterviewQuestions, generateTailoredResume } from './services/geminiService';
+import { extractEmail, copyToClipboard, downloadAsPDF, sendToGoogleSheets } from './services/utils';
+import { generateCoverLetter, generateInterviewQuestions, generateTailoredResume } from './services/aiService';
 
 // ------------------------------------------------------------------
 // SYSTEM CONFIGURATION
 // ------------------------------------------------------------------
 const SYSTEM_CONFIG = {
+  // Fallback defaults
   apiKey: process.env.API_KEY || '', 
   appsScriptUrl: 'https://script.google.com/macros/s/AKfycb.../exec',
   sheetName: 'Sheet1',
@@ -47,7 +27,11 @@ const SYSTEM_CONFIG = {
 
 const DEFAULT_USER_CONFIG: AppConfig = {
   ...SYSTEM_CONFIG,
+  provider: 'gemini',
   model: 'gemini-2.5-flash',
+  geminiApiKey: SYSTEM_CONFIG.apiKey,
+  openAiApiKey: '',
+  openRouterApiKey: '',
   userName: '',
   userEmail: '',
   userPhone: '',
@@ -55,10 +39,10 @@ const DEFAULT_USER_CONFIG: AppConfig = {
 };
 
 const TONES = [
-  { id: 'Professional', label: 'Professional', icon: '👔' },
-  { id: 'Enthusiastic', label: 'Enthusiastic', icon: '🚀' },
-  { id: 'Confident', label: 'Confident', icon: '🦁' },
-  { id: 'Direct', label: 'Direct', icon: '🎯' },
+  { id: 'Professional', label: 'Professional' },
+  { id: 'Enthusiastic', label: 'Enthusiastic' },
+  { id: 'Confident', label: 'Confident' },
+  { id: 'Direct', label: 'Direct' },
 ];
 
 const LENGTHS = [
@@ -68,17 +52,17 @@ const LENGTHS = [
 ];
 
 const LANGUAGES = [
-  { id: 'English', label: 'English', flag: '🇺🇸' },
-  { id: 'Spanish', label: 'Spanish', flag: '🇪🇸' },
-  { id: 'French', label: 'French', flag: '🇫🇷' },
-  { id: 'German', label: 'German', flag: '🇩🇪' },
-  { id: 'Hindi', label: 'Hindi', flag: '🇮🇳' },
+  { id: 'English', label: 'English' },
+  { id: 'Spanish', label: 'Spanish' },
+  { id: 'French', label: 'French' },
+  { id: 'German', label: 'German' },
+  { id: 'Hindi', label: 'Hindi' },
 ];
 
 const App: React.FC = () => {
   // Navigation State
   const [view, setView] = useState<'landing' | 'app'>('landing');
-  const [isDarkMode, setIsDarkMode] = useState(true); // Default to Dark Mode for Flux theme
+  const [isDarkMode, setIsDarkMode] = useState(true); 
 
   // State: Configuration & UI
   const [config, setConfig] = useState<AppConfig>(DEFAULT_USER_CONFIG);
@@ -100,7 +84,7 @@ const App: React.FC = () => {
   
   // State: Outputs
   const [generatedLetter, setGeneratedLetter] = useState('');
-  const [generatedResume, setGeneratedResume] = useState(''); // New State for Resume HTML
+  const [generatedResume, setGeneratedResume] = useState('');
   const [extractedEmail, setExtractedEmail] = useState<string | null>(null);
   const [interviewPrep, setInterviewPrep] = useState<string | null>(null);
   const [showInterviewModal, setShowInterviewModal] = useState(false);
@@ -113,9 +97,8 @@ const App: React.FC = () => {
   const [toast, setToast] = useState<ToastState>({ show: false, message: '', type: 'info' });
   const [tokenClient, setTokenClient] = useState<any>(null);
 
-  // Ref for auto-resizing textarea
+  // Refs
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  // Ref for resume content
   const resumeRef = useRef<HTMLDivElement>(null);
 
   // --- THEME MANAGEMENT ---
@@ -137,16 +120,23 @@ const App: React.FC = () => {
     if (savedConfig) {
       try {
         const parsed = JSON.parse(savedConfig);
-        setConfig(prev => ({ 
-          ...prev, 
-          // Preserve system defaults if local storage is empty/old
-          apiKey: parsed.apiKey || SYSTEM_CONFIG.apiKey,
-          model: parsed.model || 'gemini-2.5-flash',
-          userName: parsed.userName || '', 
-          userEmail: parsed.userEmail || '',
-          userPhone: parsed.userPhone || '',
-          userLinkedIn: parsed.userLinkedIn || ''
-        }));
+        setConfig(prev => {
+          // Backward compatibility: If old config used 'apiKey' but no 'geminiApiKey'
+          const geminiKey = parsed.geminiApiKey || parsed.apiKey || SYSTEM_CONFIG.apiKey;
+          
+          return { 
+            ...prev, 
+            provider: parsed.provider || 'gemini',
+            model: parsed.model || 'gemini-2.5-flash',
+            geminiApiKey: geminiKey,
+            openAiApiKey: parsed.openAiApiKey || '',
+            openRouterApiKey: parsed.openRouterApiKey || '',
+            userName: parsed.userName || '', 
+            userEmail: parsed.userEmail || '',
+            userPhone: parsed.userPhone || '',
+            userLinkedIn: parsed.userLinkedIn || ''
+          };
+        });
       } catch (e) { console.error(e); }
     }
     if (savedJob) setJobDescription(savedJob);
@@ -159,8 +149,11 @@ const App: React.FC = () => {
   // Save drafts
   useEffect(() => {
     localStorage.setItem('ai_cover_letter_user_profile', JSON.stringify({
-      apiKey: config.apiKey,
+      provider: config.provider,
       model: config.model,
+      geminiApiKey: config.geminiApiKey,
+      openAiApiKey: config.openAiApiKey,
+      openRouterApiKey: config.openRouterApiKey,
       userName: config.userName,
       userEmail: config.userEmail,
       userPhone: config.userPhone,
@@ -182,7 +175,7 @@ const App: React.FC = () => {
     localStorage.setItem('ai_cover_letter_history', JSON.stringify(history));
   }, [history]);
 
-  // Auto-resize logic for the generated letter textarea
+  // Auto-resize logic
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -216,6 +209,15 @@ const App: React.FC = () => {
     setToast({ show: true, message, type });
   };
 
+  const getActiveApiKey = () => {
+    switch(config.provider) {
+      case 'gemini': return config.geminiApiKey;
+      case 'openai': return config.openAiApiKey;
+      case 'openrouter': return config.openRouterApiKey;
+      default: return '';
+    }
+  }
+
   const addToHistory = (content: string, jd: string) => {
     const title = jd.split('\n')[0].substring(0, 40) + '...';
     const newItem: HistoryItem = {
@@ -224,12 +226,13 @@ const App: React.FC = () => {
       jobTitle: title || 'Untitled Job',
       content
     };
-    setHistory(prev => [newItem, ...prev].slice(0, 20)); // Keep last 20
+    setHistory(prev => [newItem, ...prev].slice(0, 20)); 
   };
 
   const handleGenerate = async () => {
-    if (!config.apiKey) {
-      showToast('System Error: API Key not configured. Please open Settings.', 'error');
+    const activeKey = getActiveApiKey();
+    if (!activeKey) {
+      showToast(`${config.provider.toUpperCase()} API Key missing. Open settings.`, 'error');
       setIsConfigOpen(true);
       return;
     }
@@ -242,7 +245,6 @@ const App: React.FC = () => {
     setIsGenerating(true);
     
     try {
-      // Determine what to generate based on the output tab
       if (outputTab === 'letter') {
         const letter = await generateCoverLetter(
           jobDescription, 
@@ -251,14 +253,12 @@ const App: React.FC = () => {
           selectedTone,
           selectedLength,
           selectedLanguage,
-          config.model,
-          config.apiKey
+          config
         );
         setGeneratedLetter(letter);
         addToHistory(letter, jobDescription);
         showToast('Cover letter generated!', 'success');
       } else {
-        // Generate Resume
         if (!resumeText.trim()) {
             showToast('Please provide your resume text for analysis first.', 'error');
             setActiveTab('resume');
@@ -268,8 +268,7 @@ const App: React.FC = () => {
         const resumeHtml = await generateTailoredResume(
             jobDescription,
             resumeText,
-            config.model,
-            config.apiKey
+            config
         );
         setGeneratedResume(resumeHtml.trim());
         showToast('Tailored resume generated!', 'success');
@@ -284,24 +283,29 @@ const App: React.FC = () => {
 
   const handleInterviewPrep = async () => {
     if (!jobDescription) return;
+    const activeKey = getActiveApiKey();
+    if (!activeKey) {
+        showToast("API Key missing", "error");
+        setIsConfigOpen(true);
+        return;
+    }
+
     setIsPrepGenerating(true);
     setShowInterviewModal(true);
     try {
       const prep = await generateInterviewQuestions(
           jobDescription,
-          config.model,
-          config.apiKey
+          config
       );
       setInterviewPrep(prep);
     } catch (e) {
-      setInterviewPrep("Failed to generate questions.");
+      setInterviewPrep("Failed to generate questions. Check API Key.");
     } finally {
       setIsPrepGenerating(false);
     }
   };
 
   const initiateSend = () => {
-    // Only supports sending cover letters currently for simplicity
     if (!generatedLetter && outputTab === 'letter') return;
     if (!config.appsScriptUrl) {
       showToast('System Error: Sheet URL not configured.', 'error');
@@ -352,19 +356,10 @@ const App: React.FC = () => {
     const content = outputTab === 'letter' ? generatedLetter : generatedResume;
     if (!content) return;
 
-    // 1. Sanitize Name
     const safeName = (config.userName || 'Candidate').trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-
-    // 2. Extract Context (Company/Role) from first line of JD
-    // Get first non-empty line
     const firstLine = jobDescription.split('\n').find(line => line.trim().length > 0) || 'Job_Application';
-    // Take max 30 chars, replace spaces with _, remove weird chars
     const safeContext = firstLine.substring(0, 30).trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-
-    // 3. Document Type
     const docType = outputTab === 'letter' ? 'Cover_Letter' : 'Resume';
-
-    // Format: Name_Company_Type.pdf
     const filename = `${safeName}_${safeContext}_${docType}.pdf`;
 
     downloadAsPDF(content, config, filename);
@@ -532,6 +527,16 @@ const App: React.FC = () => {
                     </select>
                     <ChevronDown className="absolute right-3 top-3 text-zinc-400 pointer-events-none" size={12} />
                   </div>
+                  <div className="relative col-span-2">
+                    <select 
+                      value={selectedLanguage}
+                      onChange={(e) => setSelectedLanguage(e.target.value)}
+                      className="w-full appearance-none bg-white dark:bg-[#0A0A0A] border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 focus:border-orange-500 outline-none transition-colors"
+                    >
+                      {LANGUAGES.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 text-zinc-400 pointer-events-none" size={12} />
+                  </div>
                 </div>
              )}
 
@@ -550,6 +555,9 @@ const App: React.FC = () => {
               {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
               {outputTab === 'resume' ? 'GENERATE RESUME' : 'GENERATE LETTER'}
             </button>
+            <p className="text-[10px] text-center text-zinc-400">
+               Using: <span className="font-semibold">{config.provider === 'openrouter' ? 'OpenRouter' : config.provider === 'openai' ? 'OpenAI' : 'Gemini'}</span>
+            </p>
           </div>
         </section>
 
