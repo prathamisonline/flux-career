@@ -1,8 +1,9 @@
 
+
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, Sparkles, Copy, Check, ArrowRight, FileText, FileBadge, MessageSquare } from 'lucide-react';
+import { X, Send, Sparkles, Copy, Check, ArrowRight, FileText, FileBadge, MessageSquare, RefreshCw } from 'lucide-react';
 import { ChatMessage } from '../types';
-import { copyToClipboard } from '../services/utils';
+import { copyToClipboard, parseAIResponse } from '../services/utils';
 
 interface ChatSidebarProps {
   isOpen: boolean;
@@ -49,11 +50,6 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
     await copyToClipboard(text);
   };
 
-  // Determine if content looks like a full document (simple heuristic)
-  const isDocumentContent = (text: string) => {
-    return text.length > 200 || text.includes('Dear') || text.includes('<h3>');
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -88,42 +84,56 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
           </div>
         )}
         
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div 
-              className={`
-                max-w-[85%] rounded-2xl p-3.5 text-sm leading-relaxed shadow-sm
-                ${msg.role === 'user' 
-                  ? 'bg-zinc-900 dark:bg-white text-white dark:text-black rounded-tr-none' 
-                  : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-white/10 rounded-tl-none'}
-              `}
-            >
-              <div className="whitespace-pre-wrap">{msg.content}</div>
-              
-              {/* AI Message Actions */}
-              {msg.role === 'assistant' && (
-                <div className="mt-3 pt-3 border-t border-black/5 dark:border-white/5 flex items-center justify-end gap-2">
-                  <button 
-                    onClick={() => handleCopy(msg.content)}
-                    className="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                    title="Copy"
-                  >
-                    <Copy size={14} />
-                  </button>
-                  {isDocumentContent(msg.content) && (
+        {messages.map((msg) => {
+           // Parse content to check for hidden document updates
+           const { hasDocument, content: docContent, displayMessage } = parseAIResponse(msg.content);
+
+           return (
+            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div 
+                className={`
+                  max-w-[85%] rounded-2xl p-3.5 text-sm leading-relaxed shadow-sm
+                  ${msg.role === 'user' 
+                    ? 'bg-zinc-900 dark:bg-white text-white dark:text-black rounded-tr-none' 
+                    : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-white/10 rounded-tl-none'}
+                `}
+              >
+                <div className="whitespace-pre-wrap">{msg.role === 'user' ? msg.content : displayMessage}</div>
+                
+                {/* Document Update Action Block */}
+                {msg.role === 'assistant' && hasDocument && (
+                  <div className="mt-3 pt-2 border-t border-black/5 dark:border-white/5">
+                    <div className="flex items-center justify-between gap-2 bg-emerald-500/10 rounded p-2 border border-emerald-500/20">
+                      <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                        <RefreshCw size={12} />
+                        <span>Document Updated</span>
+                      </div>
+                      <button 
+                        onClick={() => onApplyContent(docContent)}
+                        className="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold uppercase tracking-wide rounded transition-colors shadow-sm"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Standard Actions (Copy) */}
+                {msg.role === 'assistant' && !hasDocument && (
+                  <div className="mt-3 pt-2 border-t border-black/5 dark:border-white/5 flex items-center justify-end gap-2">
                     <button 
-                      onClick={() => onApplyContent(msg.content)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 text-xs font-bold uppercase tracking-wide rounded transition-colors"
-                      title="Replace current document"
+                      onClick={() => handleCopy(displayMessage)}
+                      className="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                      title="Copy"
                     >
-                      <Check size={12} /> Apply to Editor
+                      <Copy size={12} />
                     </button>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+           );
+        })}
         
         {isTyping && (
            <div className="flex justify-start">

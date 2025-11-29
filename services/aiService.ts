@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI } from "@google/genai";
 import { AppConfig, ChatMessage } from "../types";
 
@@ -202,6 +203,8 @@ export const sendChatResponse = async (
   },
   config: AppConfig
 ): Promise<string> => {
+  const isResume = context.documentType === 'Tailored Resume';
+  
   const systemPrompt = `You are a professional editor assisting a candidate with their ${context.documentType}.
   
   CONTEXT:
@@ -210,14 +213,18 @@ export const sendChatResponse = async (
   
   CURRENT DOCUMENT CONTENT:
   """
-  ${context.currentDocument.substring(0, 10000)}
+  ${context.currentDocument.substring(0, 25000)}
   """
   
   INSTRUCTIONS:
-  - Help the user refine, edit, or rewrite parts of the document.
-  - Keep answers concise and helpful.
-  - If asked to rewrite the document, provide the FULL revised text.
-  - If the document is a Resume, maintain HTML formatting (<h3>, <ul>, <li>, <strong>) if providing code.
+  1. Help the user refine, edit, or rewrite parts of the document based on their request.
+  2. If the user request implies changing the document content (e.g., "Add my experience", "Rewrite summary"):
+     - You MUST output the **COMPLETE** document with the changes applied. 
+     - Do NOT output just the changed section. The editor replaces the entire text.
+     - Wrap the **ENTIRE** document content in <updated_document> and </updated_document> tags.
+     ${isResume ? '- Ensure the content inside tags is valid HTML (tags: <h3>, <ul>, <li>, <p>, <strong>, <div>). Do not use Markdown inside the tags.' : '- Ensure the content inside tags is plain text.'}
+  3. Provide a brief friendly summary of what you changed in the conversational part of your response (outside the tags).
+  4. If the user just asks a question (e.g., "Any tips?"), just answer normally without tags.
   `;
 
   // Format history into a conversation block
@@ -227,12 +234,5 @@ export const sendChatResponse = async (
 
   const userPrompt = `CHAT HISTORY:\n${conversation}\n\nUSER'S LATEST REQUEST: (See history)`;
 
-  // Since our generateText is single-turn, we rely on the conversation block we just built
-  // Ideally, provider handlers would support array of messages, but this hack works for state-less calls
-  // The 'userPrompt' effectively carries the conversation context.
-  
-  // To make it work with the existing generateText (which puts userPrompt at the end):
-  // We'll actually pass the conversation as the 'userPrompt'
-  
   return generateText({ systemPrompt, userPrompt, config });
 };

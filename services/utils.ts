@@ -1,4 +1,5 @@
 
+
 import { SheetPayload, AppConfig } from '../types';
 
 export const extractEmail = (text: string): string | null => {
@@ -200,4 +201,28 @@ export const sendToGoogleSheets = async (data: SheetPayload, scriptUrl: string, 
   }
 
   return { success: true };
+};
+
+export const parseAIResponse = (text: string) => {
+  // Regex to match content inside <updated_document> tags
+  const match = text.match(/<updated_document>([\s\S]*?)<\/updated_document>/);
+  
+  if (match && match[1]) {
+    const documentContent = match[1].trim();
+    // Remove the tag block from the main text for cleaner display in chat
+    // We replace it with an empty string so the chat bubble only shows the conversation
+    const displayMessage = text.replace(/<updated_document>[\s\S]*?<\/updated_document>/, '').trim();
+    
+    return {
+      hasDocument: true,
+      content: documentContent,
+      displayMessage: displayMessage || "I've updated the document for you."
+    };
+  }
+
+  return {
+    hasDocument: false,
+    content: text,
+    displayMessage: text
+  };
 };
