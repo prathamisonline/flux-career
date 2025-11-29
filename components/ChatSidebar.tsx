@@ -49,29 +49,9 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
     await copyToClipboard(text);
   };
 
-  // --- PARSING LOGIC ---
-  const parseAIResponse = (fullText: string) => {
-    // Regex to find content inside <DOCUMENT_CONTENT> tags
-    const tagRegex = /<DOCUMENT_CONTENT>([\s\S]*?)<\/DOCUMENT_CONTENT>/;
-    const match = fullText.match(tagRegex);
-    
-    if (match) {
-      // Remove the tag block from the conversational message display
-      const conversationalMessage = fullText.replace(tagRegex, '').trim();
-      // Extracted clean content
-      const cleanContent = match[1].trim();
-      return { 
-        display: conversationalMessage || "I've updated the document for you.", 
-        content: cleanContent,
-        hasUpdate: true 
-      };
-    }
-
-    return { 
-      display: fullText, 
-      content: null, 
-      hasUpdate: false 
-    };
+  // Determine if content looks like a full document (simple heuristic)
+  const isDocumentContent = (text: string) => {
+    return text.length > 200 || text.includes('Dear') || text.includes('<h3>');
   };
 
   if (!isOpen) return null;
@@ -108,49 +88,42 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
           </div>
         )}
         
-        {messages.map((msg) => {
-          // Parse the message if it is from assistant
-          const parsed = msg.role === 'assistant' 
-            ? parseAIResponse(msg.content) 
-            : { display: msg.content, content: null, hasUpdate: false };
-
-          return (
-            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div 
-                className={`
-                  max-w-[85%] rounded-2xl p-3.5 text-sm leading-relaxed shadow-sm
-                  ${msg.role === 'user' 
-                    ? 'bg-zinc-900 dark:bg-white text-white dark:text-black rounded-tr-none' 
-                    : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-white/10 rounded-tl-none'}
-                `}
-              >
-                <div className="whitespace-pre-wrap">{parsed.display}</div>
-                
-                {/* AI Message Actions */}
-                {msg.role === 'assistant' && (
-                  <div className="mt-3 pt-3 border-t border-black/5 dark:border-white/5 flex items-center justify-end gap-2">
+        {messages.map((msg) => (
+          <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div 
+              className={`
+                max-w-[85%] rounded-2xl p-3.5 text-sm leading-relaxed shadow-sm
+                ${msg.role === 'user' 
+                  ? 'bg-zinc-900 dark:bg-white text-white dark:text-black rounded-tr-none' 
+                  : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-white/10 rounded-tl-none'}
+              `}
+            >
+              <div className="whitespace-pre-wrap">{msg.content}</div>
+              
+              {/* AI Message Actions */}
+              {msg.role === 'assistant' && (
+                <div className="mt-3 pt-3 border-t border-black/5 dark:border-white/5 flex items-center justify-end gap-2">
+                  <button 
+                    onClick={() => handleCopy(msg.content)}
+                    className="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                    title="Copy"
+                  >
+                    <Copy size={14} />
+                  </button>
+                  {isDocumentContent(msg.content) && (
                     <button 
-                      onClick={() => handleCopy(parsed.content || parsed.display)}
-                      className="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                      title="Copy"
+                      onClick={() => onApplyContent(msg.content)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 text-xs font-bold uppercase tracking-wide rounded transition-colors"
+                      title="Replace current document"
                     >
-                      <Copy size={14} />
+                      <Check size={12} /> Apply to Editor
                     </button>
-                    {parsed.hasUpdate && parsed.content && (
-                      <button 
-                        onClick={() => onApplyContent(parsed.content!)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 text-xs font-bold uppercase tracking-wide rounded transition-colors"
-                        title="Replace current document"
-                      >
-                        <Check size={12} /> Apply Fix
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
-          );
-        })}
+          </div>
+        ))}
         
         {isTyping && (
            <div className="flex justify-start">

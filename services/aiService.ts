@@ -130,7 +130,7 @@ export const generateCoverLetter = async (
   resumeText: string,
   userName: string,
   tone: string,
-  length: string, 
+  length: string,
   language: string,
   config: AppConfig
 ): Promise<string> => {
@@ -210,19 +210,14 @@ export const sendChatResponse = async (
   
   CURRENT DOCUMENT CONTENT:
   """
-  ${context.currentDocument.substring(0, 15000)}
+  ${context.currentDocument.substring(0, 10000)}
   """
   
-  CRITICAL RULES:
-  1. You are helpful and concise.
-  2. If the user asks for an edit, correction, or rewrite, you MUST return the **FULL, COMPLETE DOCUMENT** with the changes applied. Do NOT return just a snippet.
-  3. When returning document content, you MUST wrap it strictly in these tags: 
-     <DOCUMENT_CONTENT>
-     ... full document text/html here ...
-     </DOCUMENT_CONTENT>
-  4. Put your conversational reply (e.g., "I've corrected the dates...") OUTSIDE the tags.
-  5. If the document is a Resume, strictly maintain the HTML structure (<h3>, <ul>, <li>, <strong>) inside the tags.
-  6. Do NOT include markdown code blocks (like \`\`\`html) inside the <DOCUMENT_CONTENT> tags.
+  INSTRUCTIONS:
+  - Help the user refine, edit, or rewrite parts of the document.
+  - Keep answers concise and helpful.
+  - If asked to rewrite the document, provide the FULL revised text.
+  - If the document is a Resume, maintain HTML formatting (<h3>, <ul>, <li>, <strong>) if providing code.
   `;
 
   // Format history into a conversation block
@@ -232,5 +227,12 @@ export const sendChatResponse = async (
 
   const userPrompt = `CHAT HISTORY:\n${conversation}\n\nUSER'S LATEST REQUEST: (See history)`;
 
+  // Since our generateText is single-turn, we rely on the conversation block we just built
+  // Ideally, provider handlers would support array of messages, but this hack works for state-less calls
+  // The 'userPrompt' effectively carries the conversation context.
+  
+  // To make it work with the existing generateText (which puts userPrompt at the end):
+  // We'll actually pass the conversation as the 'userPrompt'
+  
   return generateText({ systemPrompt, userPrompt, config });
 };
